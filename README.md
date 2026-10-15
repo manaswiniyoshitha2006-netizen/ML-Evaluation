@@ -1,184 +1,85 @@
-# Customer Lifetime Value & Churn Analysis — ML Evaluation Project
+# Telco Customer Insights — ML Evaluation
 
-## 📌 Project Overview
-This project applies **regression** techniques to the Telco Customer Churn dataset. It is used to find the CLTV.
+A working Streamlit application for CLTV regression, churn classification, and customer segmentation on the included 7,043-row Telco dataset.
 
-## 📂 Repository Structure
-```
-/
-├── README.md
-├── requirements.txt
-├── data/                  # Raw dataset + processed CSVs
-├── notebooks/
-│   ├── regression.ipynb
-│   ├── classification.ipynb
-│   └── clustering.ipynb
-├── models/                # Saved model files (.pkl via joblib)
-└── app/                   # GUI / deployment code (optional bonus)
-```
+## Run locally
 
-## 📊 Dataset
-- **Source:** Telco Customer Churn dataset (`TelcoCustomerChurn.csv`)
-- Contains customer demographics, account information, service usage, billing details, and churn outcomes.
-- Missing values were treated semantically (e.g., missing `Offer` → `"No Offer"`, missing `InternetType` → `"No Internet"`) rather than statistically imputed, since they represent meaningful categories.
+Use Python 3.11 (the version used to train and test the saved models).
 
-## ⚙️ Setup Instructions
-1. Clone this repository:
 ```bash
-   git clone https://github.com/<your-username>/<your-repo>.git
-   cd <your-repo>
+python -m venv .venv
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run streamlit_app.py
 ```
-2. Create a virtual environment (recommended):
+
+The fitted pipelines are included under `models/app/`. The app never trains on startup and needs no API keys. Use example customers, fill in a single customer, or download the CSV template and upload up to 10,000 rows / 10 MB. Each track supports prediction downloads. CSV headers must match the template. Extra columns are preserved in exports but ignored by models.
+
+## Existing project work and scope
+
+All original notebooks, datasets, and existing model files are preserved. The previous README is retained as `README.original.md`.
+
+Install `requirements-notebooks.txt` instead of the runtime requirements if you also want Jupyter and the original plotting dependencies.
+
+- `notebooks/regression.ipynb`: Telco CLTV regression; existing processed datasets and train/test partitions are retained.
+- `notebooks/classification (1).ipynb`: credit-card default, **not Telco churn**.
+- `notebooks/clustering.ipynb`: meteorite clustering, **not customer segmentation**.
+
+The deployment adds separate Telco churn and customer segmentation pipelines; it does not claim these were the original notebook models. It does not replace the notebooks' broader algorithm comparisons or constitute a new full capstone report.
+
+## Models and evaluation
+
+Run `python train_models.py` from the repository root to reproduce all deployment artifacts. This overwrites only `models/app/` deployment files. Fit with the pinned dependencies before loading models; scikit-learn serialized models are version dependent. Load only trusted joblib files.
+
+- **CLTV:** GradientBoostingRegressor (200 estimators, learning rate 0.05, depth 2). Uses the repository's existing `regression_train.csv` and `regression_test.csv` split. This is a newly fitted deployment model, not an exported notebook kernel object or a claim of exact notebook tuning reproduction.
+- **Churn:** GradientBoostingClassifier (150 estimators, depth 2). Target `ChurnLabel` maps No=0 and Yes=1. Stratified 80/20 holdout, seed 42. Threshold defaults to 0.5 and can be changed in the app. Metrics report threshold 0.5. Historical classification scores are not calibrated future probabilities.
+- **Segments:** KMeans on tenure, monthly charge, download usage, referrals, and service count. Median imputation and standard scaling precede clustering. Select K=2..6 by silhouette on a fixed 1,500-row sample, then fit the chosen K to all customers. This is descriptive full-population analysis, not held-out predictive evaluation. Profiles show segment sizes and feature means; cluster IDs have no rank or fixed meaning across retraining.
+
+`models/app/metrics.json` contains actual measured holdout metrics, cluster selection scores, row counts, seed, library version, and source-data SHA-256. `segment_profiles.csv` contains interpretable cluster summaries. Supervised models remain fitted on training rows only.
+
+Measured deployment results (seed 42, Python 3.11.9):
+
+| Track | Metric | Value |
+|---|---|---:|
+| CLTV | Holdout R² | 0.2052 |
+| CLTV | Holdout RMSE | 1058.52 |
+| CLTV | Holdout MAE | 896.50 |
+| Churn | Holdout accuracy | 0.8453 |
+| Churn | Holdout precision | 0.7422 |
+| Churn | Holdout recall | 0.6390 |
+| Churn | Holdout F1 | 0.6868 |
+| Churn | Holdout ROC-AUC | 0.9095 |
+| Segments | Selected K | 6 |
+| Segments | Sample silhouette | 0.3014 |
+
+The six profiles distinguish low-spend customers with high referrals (0), long-tenure service-rich customers (1), shorter-tenure moderate-spend customers (2), low-spend customers with few services (3), long-tenure high-referral customers (4), and high-download customers (5). These descriptions summarize feature means, not causal explanations.
+
+The fitted Pipeline includes feature engineering, imputers, scaling, encoding, and estimator. Numeric blanks use training medians; missing Offer and InternetType become No Offer and No Internet. Other categorical blanks use training modes. Unseen categories are ignored by the encoder. ServiceCount counts the eight add-on services; charge-per-tenure uses TotalCharges / TenureinMonths with zero tenure treated as missing. Invalid numeric text, infinities, negative values, empty uploads, and missing columns produce validation messages.
+
+Input allowlists exclude customer identifiers, geography, CLTV, all churn outcomes, ChurnScore, CustomerStatus, and SatisfactionScore. SatisfactionScore is omitted because its collection timing is unspecified. Model inputs should reflect information available when scoring. CLTV horizon and currency are unspecified in the source; estimates have substantial error and should be interpreted alongside the metrics.
+
+## Tests
+
 ```bash
-   python -m venv venv
-   source venv/bin/activate   # On Windows: venv\Scripts\activate
-```
-3. Install dependencies:
-```bash
-   pip install -r requirements.txt
-```
-4. Launch Jupyter and run the notebooks in `notebooks/`:
-```bash
-   jupyter notebook
+pip install -r requirements-dev.txt
+python -m pytest -q
 ```
 
-## 🔬 Methodology (Regression)
-- **Target:** `CLTV` (Customer Lifetime Value)
-- **Preprocessing:** Median imputation + `StandardScaler` for numeric features; most-frequent imputation + `OneHotEncoder` for categorical features, all wrapped in a `ColumnTransformer`/`Pipeline` to prevent data leakage.
-- **Feature engineering:** Added `ServiceCount` (total add-on services) and `AvgChargePerTenureMonth`.
-- **Split:** Stratified 80/20 train-test split (stratified on CLTV deciles).
-- **Models compared (10):** Linear, Ridge, Lasso, ElasticNet, Polynomial (deg 2 & 3), Decision Tree, Random Forest, Gradient Boosting, SVR, KNN — each evaluated with R², RMSE, and MAE, with `GridSearchCV` (5-fold) hyperparameter tuning.
+Tests load each real saved pipeline, compare single/batch predictions, check outcome-field exclusion, missing/unseen input handling and validation, and exercise all three Streamlit views and single-customer form submissions. GitHub Actions runs these tests with Python 3.11. The app's CSV prediction logic is tested directly; automated UI tests do not exercise the browser file picker.
 
-### Results Summary
-| Model | R² | RMSE | MAE |
-|---|---|---|---|
-| **Gradient Boosting (tuned)** | **0.2090** | **1056.00** | **895.62** |
-| Random Forest (tuned) | 0.2013 | 1061.13 | 898.31 |
-| Decision Tree (tuned) | 0.1978 | 1063.47 | 900.78 |
-| Lasso (tuned) | 0.1378 | 1102.52 | 931.14 |
-| SVR (tuned) | 0.1371 | 1102.96 | 928.81 |
-| ElasticNet (tuned) | 0.1336 | 1105.21 | 931.61 |
-| Ridge (tuned) | 0.1334 | 1105.34 | 931.59 |
-| Linear Regression | 0.1319 | 1106.32 | 931.01 |
-| KNN (tuned) | 0.0743 | 1142.42 | 958.28 |
-| Polynomial (deg 2) | 0.0109 | 1180.86 | 968.09 |
+## Deploy to Streamlit Community Cloud
 
-**Best model:** Gradient Boosting Regressor, confirmed via 5-fold cross-validation (mean CV R² ≈ 0.2225).
+1. Upload/commit these changes, including `models/app/`, to `manaswiniyoshitha2006-netizen/ML-Evaluation` using an account with write permission. Keep the lowercase `requirements.txt` name on GitHub (the old uppercase file was renamed).
+2. Sign in to https://share.streamlit.io with the account authorized for the repository and select **Create app**.
+3. Choose repository `manaswiniyoshitha2006-netizen/ML-Evaluation`, the branch containing these changes, and main file `streamlit_app.py`.
+4. In advanced settings choose **Python 3.11**, then deploy. No secrets are required.
+5. Confirm the example predictions work on all tracks, submit a customer form, and upload the downloaded CSV template.
 
-## 🔬 Methodology (Classification)
-> _TODO: Fill in once `classification.ipynb` is finalized — target variable, models compared, best-performing model, and key metrics (accuracy, precision, recall, F1, ROC-AUC)._
+Community Cloud builds dependencies from the repository's requirements file; it loads the committed fitted models. See the official [deployment guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) and [dependency guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies).
 
-## 🔬 Methodology (Clustering)
-> _TODO: Fill in once `clustering.ipynb` is finalized — clustering algorithm(s) used, number of clusters chosen, and key cluster interpretations._
+## Apply the deliverable safely
 
-## 🗂️ Saved Models
-Trained model files are saved under `models/` using `joblib`:
-```python
-import joblib
-joblib.dump(best_gb_model, "models/gradient_boosting_cltv.pkl")
-```
+The accompanying `streamlit-app-changes.zip` contains only added/changed files. Extract it into an up-to-date clone, review changes, stage the `Requirements.txt` → `requirements.txt` rename explicitly on case-sensitive systems, and commit on a new branch. Do not replace the data or notebooks. `delivery.patch` is also supplied for tracked text changes; the changes ZIP includes the binary trained models too. The complete updated repository ZIP provides a separate runnable copy.
 
-## 🖥️ App / Deployment (Bonus)
-> _TODO: Describe here if you build a GUI or deployment app under `app/`._
-
-## 👥 Contributors
-- <Add team member names here>
-
-## 📄 License
-> _Add a license if required by your course/assignment guidelines._
-
-A couple of notes:
-
-I pinned the versions loosely to what's current/stable — if pip freeze on your machine gives different versions, swap them in for accuracy.
-The results table numbers come straight from your notebook's printed output — double check them against your final run before committing, in case reruns shift slightly.
-Remember the grading note about committing at every milestone rather than one big commit — so don't dump all this in a single commit at the end.
-
-give me correctly read me
-
-Here's the README on its own, cleaned up and ready to paste directly into your README.md file:
-
-markdown
-# Customer Lifetime Value & Churn Analysis — ML Evaluation Project
-
-## Project Overview
-This project applies **regression**, **classification**, and **clustering** techniques to the Telco Customer Churn dataset. Each task is handled in its own notebook under `notebooks/`.
-
-| Task | Notebook | Target Variable | Goal |
-|---|---|---|---|
-| Regression | `regression.ipynb` | `CLTV` | Predict Customer Lifetime Value |
-| Classification | `classification.ipynb` | `ChurnLabel` | Predict customer churn |
-| Clustering | `clustering.ipynb` | — | Segment customers into groups |
-
-## Repository Structure
-```
-/
-├── README.md
-├── requirements.txt
-├── data/                  # Raw dataset + processed CSVs
-├── notebooks/
-│   ├── regression.ipynb
-│   ├── classification.ipynb
-│   └── clustering.ipynb
-├── models/                # Saved model files (.pkl via joblib)
-└── app/                   # GUI / deployment code (optional bonus)
-```
-
-## Dataset
-- **Source:** Telco Customer Churn dataset (`TelcoCustomerChurn.csv`)
-- Contains customer demographics, account information, service usage, billing details, and churn outcomes.
-- Missing values were treated semantically rather than statistically imputed, since they represent meaningful categories (e.g., missing `Offer` → `"No Offer"`, missing `InternetType` → `"No Internet"`).
-
-## Setup Instructions
-1. Clone this repository:
-```bash
-   git clone https://github.com/<your-username>/<your-repo>.git
-   cd <your-repo>
-```
-2. Create a virtual environment (recommended):
-```bash
-   python -m venv venv
-   source venv/bin/activate   # On Windows: venv\Scripts\activate
-```
-3. Install dependencies:
-```bash
-   pip install -r requirements.txt
-```
-4. Launch Jupyter and run the notebooks in `notebooks/`:
-```bash
-   jupyter notebook
-```
-
-## Methodology — Regression
-- **Target:** `CLTV` (Customer Lifetime Value)
-- **Preprocessing:** Median imputation + `StandardScaler` for numeric features; most-frequent imputation + `OneHotEncoder` for categorical features, wrapped in a `ColumnTransformer` / `Pipeline` to prevent data leakage.
-- **Feature engineering:** Added `ServiceCount` (total add-on services) and `AvgChargePerTenureMonth`.
-- **Split:** Stratified 80/20 train-test split (stratified on CLTV deciles).
-- **Models compared (10):** Linear, Ridge, Lasso, ElasticNet, Polynomial (degree 2 & 3), Decision Tree, Random Forest, Gradient Boosting, SVR, KNN — each evaluated with R², RMSE, and MAE, tuned via `GridSearchCV` (5-fold CV).
-
-### Results Summary
-| Model | R² | RMSE | MAE |
-|---|---|---|---|
-| **Gradient Boosting (tuned)** | **0.2090** | **1056.00** | **895.62** |
-| Random Forest (tuned) | 0.2013 | 1061.13 | 898.31 |
-| Decision Tree (tuned) | 0.1978 | 1063.47 | 900.78 |
-| Lasso (tuned) | 0.1378 | 1102.52 | 931.14 |
-| SVR (tuned) | 0.1371 | 1102.96 | 928.81 |
-| ElasticNet (tuned) | 0.1336 | 1105.21 | 931.61 |
-| Ridge (tuned) | 0.1334 | 1105.34 | 931.59 |
-| Linear Regression | 0.1319 | 1106.32 | 931.01 |
-| KNN (tuned) | 0.0743 | 1142.42 | 958.28 |
-| Polynomial (degree 2) | 0.0109 | 1180.86 | 968.09 |
-
-**Best model:** Gradient Boosting Regressor, confirmed via 5-fold cross-validation (mean CV R² ≈ 0.2225).
-
-## Methodology — Classification
-> _TODO: Fill in once `classification.ipynb` is finalized — target variable, models compared, best-performing model, and key metrics (accuracy, precision, recall, F1, ROC-AUC)._
-
-## Methodology — Clustering
-> _TODO: Fill in once `clustering.ipynb` is finalized — algorithm(s) used, number of clusters chosen, and cluster interpretations._
-
-## Saved Models
-Trained model files are saved under `models/` using `joblib`:
-```python
-import joblib
-joblib.dump(best_gb_model, "models/gradient_boosting_cltv.pkl")
+No remote push or live cloud deployment is implied by these deliverables. Publishing requires a GitHub account with write access and access to the Streamlit workspace.
