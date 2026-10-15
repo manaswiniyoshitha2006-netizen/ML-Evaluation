@@ -16,6 +16,8 @@ streamlit run streamlit_app.py
 
 The fitted pipelines are included under `models/app/`. The app never trains on startup and needs no API keys. Use example customers, fill in a single customer, or download the CSV template and upload up to 10,000 rows / 10 MB. Each track supports prediction downloads. CSV headers must match the template. Extra columns are preserved in exports but ignored by models.
 
+The dashboard includes a navy and teal visual theme, model evaluation cards, portfolio summaries, interactive value/risk distributions, and a customer segment bubble chart. Single-customer inputs are grouped into profile, billing, and services. Example mode offers reproducible samples of 10–100 customers; prediction columns appear first in the results table.
+
 ## Existing project work and scope
 
 All original notebooks, datasets, and existing model files are preserved. The previous README is retained as `README.original.md`.

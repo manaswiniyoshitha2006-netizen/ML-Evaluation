@@ -54,7 +54,7 @@ def test_regression_partition_integrity():
     assert len(train) + len(test) == len(source)
     assert not set(pd.util.hash_pandas_object(train, index=False)) & set(pd.util.hash_pandas_object(test, index=False))
 
-@pytest.mark.parametrize('track', ['Regression Â· CLTV', 'Classification Â· Churn', 'Clustering Â· Segments'])
+@pytest.mark.parametrize('track', ['Regression · CLTV', 'Classification · Churn', 'Clustering · Segments'])
 def test_streamlit_tracks_and_form(track):
     app = AppTest.from_file(str(ROOT / 'streamlit_app.py')).run(timeout=30)
     app.sidebar.radio[0].set_value(track).run()
