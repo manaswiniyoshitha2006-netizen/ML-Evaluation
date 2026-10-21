@@ -1,73 +1,89 @@
-# Telco Customer Insights — ML Evaluation
+# ML Capstone Explorer
 
-A working Streamlit application for CLTV regression, churn classification, and customer segmentation on the included 7,043-row Telco dataset.
+A structured Streamlit application for **three independent datasets**, matching the project notebooks.
+
+| Track | Actual dataset | Task | Deployment model |
+|---|---|---|---|
+| Regression | `data/TelcoCustomerChurn.csv` | Estimate supplied customer lifetime value (`CLTV`) | Gradient Boosting Regressor |
+| Classification | `data/default of credit card clients.csv` | Default payment next month (`Y`: 0 no, 1 yes) | Decision Tree Classifier |
+| Clustering | `data/Meteorite_Landings.csv` | Group landing records by mass, year, and coordinates | K-Means |
+
+Classification does **not** use Telco churn data. Clustering does **not** use Telco customer segmentation. Each track loads its own fitted pipeline, input schema, example records, CSV template, charts, and evaluation. The dataset name is always visible in the interface.
 
 ## Run locally
 
-Use Python 3.11 (the version used to train and test the saved models).
+Use Python **3.11** and run commands from the repository root:
 
 ```bash
 python -m venv .venv
-# Windows: .venv\Scripts\activate
+# Windows PowerShell:
+.venv\Scripts\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
 streamlit run streamlit_app.py
 ```
 
-The fitted pipelines are included under `models/app/`. The app never trains on startup and needs no API keys. Use example customers, fill in a single customer, or download the CSV template and upload up to 10,000 rows / 10 MB. Each track supports prediction downloads. CSV headers must match the template. Extra columns are preserved in exports but ignored by models.
+Open the Local URL printed by Streamlit. Keep the terminal open. No API keys or training at startup are required. Install `requirements-notebooks.txt` if you also need Jupyter and plotting dependencies.
 
-The dashboard includes a navy and teal visual theme, model evaluation cards, portfolio summaries, interactive value/risk distributions, and a customer segment bubble chart. Single-customer inputs are grouped into profile, billing, and services. Example mode offers reproducible samples of 10–100 customers; prediction columns appear first in the results table.
+## App structure
 
-### App navigation
+- **Run analysis:** select example records, enter a single record in grouped forms, or upload a CSV. Read the interpretation, inspect Visual summary, and open Records & export to download predictions.
+- **Model performance:** see the method, dataset, measured evaluation, metric explanations, and training provenance. Classification includes a confusion matrix; clustering includes K selection scores.
+- **Dataset & user guide:** compare the three tracks, review code definitions and cleaning rules, and consult the selected track's input reference.
 
-- **Analyze customers:** choose example customers, a single customer, or a CSV upload. Single-customer fields use readable labels and three form sections. Results include a plain-language interpretation, a visual summary, and a separate records/export tab. The last submitted customer remains available when adjusting the churn threshold.
-- **Model performance:** view the fitted method, measured evaluation, metric explanations, limitations, and technical training details. Churn includes the test-set confusion matrix; clustering shows the group-count comparison.
-- **User guide:** follow the workflow, learn the meaning of each output, review upload rules, and consult the input-column reference.
+Uploads must use the selected track's template: Telco account columns for regression, `X1` through `X23` for classification, and `mass (g),year,reclat,reclong` for clustering. A CSV from a different track is rejected with missing-column details. Limits: 10,000 rows and 10 MB. Extra columns remain in exports but are excluded from prediction. Exported CSVs keep original dataset column names; the UI uses readable labels.
 
-Segment descriptions summarize the saved profiles. The dashboard labels are friendly names; exported CSVs retain the original column names. Histograms are aggregated before plotting so a 10,000-row upload is not blocked by the chart library's row limit.
+Example records are exploratory examples from the source population, not a separate held-out test. Performance metrics are computed offline on the documented split or clustering sample.
 
-## Existing project work and scope
+## Training and notebook alignment
 
-All original notebooks, datasets, and existing model files are preserved. The previous README is retained as `README.original.md`.
+```bash
+python train_models.py
+```
 
-Install `requirements-notebooks.txt` instead of the runtime requirements if you also want Jupyter and the original plotting dependencies.
+This recreates `models/app/{cltv,credit,meteorites}.joblib`, `metrics.json`, and `meteorite_profiles.csv`. Each joblib includes its complete fitted feature transformation/preprocessor and estimator. Use the pinned scikit-learn version and load only trusted joblib artifacts.
 
-- `notebooks/regression.ipynb`: Telco CLTV regression; existing processed datasets and train/test partitions are retained.
-- `notebooks/classification (1).ipynb`: credit-card default, **not Telco churn**.
-- `notebooks/clustering.ipynb`: meteorite clustering, **not customer segmentation**.
+### Regression / Telco CLTV
 
-The deployment adds separate Telco churn and customer segmentation pipelines; it does not claim these were the original notebook models. It does not replace the notebooks' broader algorithm comparisons or constitute a new full capstone report.
+Uses the existing `regression_train.csv` (5,634 rows) and `regression_test.csv` (1,409 rows). Median imputation, numeric standard scaling, and categorical one-hot encoding precede Gradient Boosting (200 estimators, depth 2, learning rate 0.05, seed 42). Feature engineering adds service count and charges per tenure month. Missing Offer and InternetType receive semantic categories. The allowlist excludes identifiers, geography, churn outcomes/scores, and SatisfactionScore.
 
-## Models and evaluation
+This is the previously tested deployment model, rather than an export of a notebook kernel or a claim to recreate its full model comparison. CLTV currency and horizon are unspecified. R-squared is modest; estimates should not be treated as exact customer valuations.
 
-Run `python train_models.py` from the repository root to reproduce all deployment artifacts. This overwrites only `models/app/` deployment files. Fit with the pinned dependencies before loading models; scikit-learn serialized models are version dependent. Load only trusted joblib files.
+### Classification / Credit-card default
 
-- **CLTV:** GradientBoostingRegressor (200 estimators, learning rate 0.05, depth 2). Uses the repository's existing `regression_train.csv` and `regression_test.csv` split. This is a newly fitted deployment model, not an exported notebook kernel object or a claim of exact notebook tuning reproduction.
-- **Churn:** GradientBoostingClassifier (150 estimators, depth 2). Target `ChurnLabel` maps No=0 and Yes=1. Stratified 80/20 holdout, seed 42. Threshold defaults to 0.5 and can be changed in the app. Metrics report threshold 0.5. Historical classification scores are not calibrated future probabilities.
-- **Segments:** KMeans on tenure, monthly charge, download usage, referrals, and service count. Median imputation and standard scaling precede clustering. Select K=2..6 by silhouette on a fixed 1,500-row sample, then fit the chosen K to all customers. This is descriptive full-population analysis, not held-out predictive evaluation. Profiles show segment sizes and feature means; cluster IDs have no rank or fixed meaning across retraining.
+Follows the latest classification notebook, `notebooks/classification  (1).ipynb`. Removes the embedded text-header row and ID field, converts values to numeric, and removes 35 duplicates, leaving **29,965 accounts**. Stratified 80/20 split: **23,972 training / 5,993 test**, seed 42.
 
-`models/app/metrics.json` contains actual measured holdout metrics, cluster selection scores, row counts, seed, library version, and source-data SHA-256. `segment_profiles.csv` contains interpretable cluster summaries. Supervised models remain fitted on training rows only.
+Uses the notebook's decision-tree approach and depth grid `[3,5,7,10,15,None]`, selected by five-fold weighted F1 on training rows; selected depth is **5**. Deployment cross-validation keeps preprocessing inside each fold to avoid sharing preprocessing statistics across folds. This does not rerun the full notebook's ten-model comparison.
 
-Measured deployment results (seed 42, Python 3.11.9):
+Feature engineering computes average bill and payment amounts before clipping the raw continuous fields to training 1st/99th percentiles, matching notebook ordering. Numeric imputation/scaling and category-code imputation/encoding are saved with the estimator. X2/X3/X4 are categorical codes. Y and IDs are excluded. Negative bill balances and repayment status codes are valid. The form explains codes and months (April through September 2005); amounts use NT dollars. Blank numeric values use training medians; category blanks use training modes. Unsupported category/status codes and invalid numeric values are rejected.
 
-| Track | Metric | Value |
+The threshold defaults to 0.50 and changes the Yes/No label, not the score. Scores are not calibrated probabilities. This is an academic model using historical demographic and financial features, not a lending eligibility system.
+
+### Clustering / Meteorite landings
+
+Follows the K-Means branch of `notebooks/clustering.ipynb`. Of **45,716 raw rows**, **31,929** are retained. Excludes missing/nonfinite selected features, negative mass, years outside 0-2026, invalid latitude/longitude, and coordinates (0,0). The fixed 2026 cutoff matches the notebook's analysis year. All four input columns are required at inference; invalid uploaded records produce explicit errors rather than being silently dropped.
+
+Uses `log1p(mass)` and StandardScaler on `[mass,year,reclat,reclong]`. Compares K=2..10 with n_init=10 and seed 42 using silhouette on the same 1,500 sampled records. Fits the selected **K=2** with n_init=20 on the complete cleaned population. The pipeline assigns new records with `predict`; it does not recluster per upload. Full-dataset cluster medians/counts are in `meteorite_profiles.csv`.
+
+Cluster IDs are identities, not rankings or verified meteorite types. Euclidean distance on standardized coordinates is not great-circle distance. The coordinate plot samples at most 5,000 points for large batches, with an explicit notice; summaries and exports include every validated row. The hierarchical clustering notebook is preserved, but no approximate out-of-sample hierarchical prediction is presented.
+
+## Measured deployment results
+
+| Track | Metric | Result |
 |---|---|---:|
-| CLTV | Holdout R² | 0.2052 |
-| CLTV | Holdout RMSE | 1058.52 |
-| CLTV | Holdout MAE | 896.50 |
-| Churn | Holdout accuracy | 0.8453 |
-| Churn | Holdout precision | 0.7422 |
-| Churn | Holdout recall | 0.6390 |
-| Churn | Holdout F1 | 0.6868 |
-| Churn | Holdout ROC-AUC | 0.9095 |
-| Segments | Selected K | 6 |
-| Segments | Sample silhouette | 0.3014 |
+| CLTV | Holdout R-squared | 0.2052 |
+| CLTV | Holdout RMSE / MAE | 1058.52 / 896.50 |
+| Credit default | Holdout accuracy | 0.8173 |
+| Credit default | Precision / recall | 0.6518 / 0.3741 |
+| Credit default | Weighted F1 / ROC-AUC | 0.7978 / 0.7446 |
+| Meteorites | Selected K | 2 |
+| Meteorites | Sample silhouette | 0.4881 |
 
-The six profiles distinguish low-spend customers with high referrals (0), long-tenure service-rich customers (1), shorter-tenure moderate-spend customers (2), low-spend customers with few services (3), long-tenure high-referral customers (4), and high-download customers (5). These descriptions summarize feature means, not causal explanations.
+`models/app/metrics.json` stores full metrics, row counts, selection scores, parameters, source-data SHA-256 values, seed, and library version. Supervised pipelines remain fitted only on training rows. Clustering is descriptive full-population analysis, not supervised holdout evaluation.
 
-The fitted Pipeline includes feature engineering, imputers, scaling, encoding, and estimator. Numeric blanks use training medians; missing Offer and InternetType become No Offer and No Internet. Other categorical blanks use training modes. Unseen categories are ignored by the encoder. ServiceCount counts the eight add-on services; charge-per-tenure uses TotalCharges / TenureinMonths with zero tenure treated as missing. Invalid numeric text, infinities, negative values, empty uploads, and missing columns produce validation messages.
+## Preservation of existing work
 
-Input allowlists exclude customer identifiers, geography, CLTV, all churn outcomes, ChurnScore, CustomerStatus, and SatisfactionScore. SatisfactionScore is omitted because its collection timing is unspecified. Model inputs should reflect information available when scoring. CLTV horizon and currency are unspecified in the source; estimates have substantial error and should be interpreted alongside the metrics.
+Original notebooks and data remain unchanged. The prior Telco-only churn/segmentation artifacts and their metrics are preserved under `models/legacy_telco/` and are **not loaded by the app**. `README.original.md` retains the initial project README. `ml_core.py` retains legacy helpers so those old joblib artifacts remain readable; the current app dispatches through `track_data.py`.
 
 ## Tests
 
@@ -76,20 +92,16 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Tests load each real saved pipeline, compare single/batch predictions, check outcome-field exclusion, missing/unseen input handling and validation, and exercise all three Streamlit views and single-customer form submissions. GitHub Actions runs these tests with Python 3.11. The app's CSV prediction logic is tested directly; automated UI tests do not exercise the browser file picker.
+Tests cover all three real saved pipelines, target/ID exclusion, single/batch consistency, different-track schema rejection, CSV round-trips, dataset cleaning and validation, distinct data provenance, each UI form/upload view, and classification threshold persistence. GitHub Actions uses Python 3.11. UI file-picker automation is not part of the test suite.
 
-## Deploy to Streamlit Community Cloud
+## Deploy or update Streamlit Community Cloud
 
-1. Upload/commit these changes, including `models/app/`, to `manaswiniyoshitha2006-netizen/ML-Evaluation` using an account with write permission. Keep the lowercase `requirements.txt` name on GitHub (the old uppercase file was renamed).
-2. Sign in to https://share.streamlit.io with the account authorized for the repository and select **Create app**.
-3. Choose repository `manaswiniyoshitha2006-netizen/ML-Evaluation`, the branch containing these changes, and main file `streamlit_app.py`.
-4. In advanced settings choose **Python 3.11**, then deploy. No secrets are required.
-5. Confirm the example predictions work on all tracks, submit a customer form, and upload the downloaded CSV template.
+1. Use repository `manaswiniyoshitha2006-netizen/ML-Evaluation` and the branch containing these files (normally `main`).
+2. Set the entry point to `streamlit_app.py` and Python version to **3.11** in Advanced settings.
+3. Use a general available subdomain, such as `ml-capstone-explorer`. No secrets are needed.
+4. Include `models/app/`, the three source datasets, and the lowercase `requirements.txt` in GitHub.
+5. After deployment, verify all three dataset labels, run an example and single record on each track, and try each downloaded template.
 
-Community Cloud builds dependencies from the repository's requirements file; it loads the committed fitted models. See the official [deployment guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy) and [dependency guide](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies).
+For an existing deployment connected to main, pushing this update should trigger an automatic update. If the old page remains visible, reboot the app from its Streamlit management menu and refresh the browser. Deployment itself and URL availability must be verified in your Streamlit workspace.
 
-## Apply the deliverable safely
-
-The accompanying `streamlit-app-changes.zip` contains only added/changed files. Extract it into an up-to-date clone, review changes, stage the `Requirements.txt` → `requirements.txt` rename explicitly on case-sensitive systems, and commit on a new branch. Do not replace the data or notebooks. `delivery.patch` is also supplied for tracked text changes; the changes ZIP includes the binary trained models too. The complete updated repository ZIP provides a separate runnable copy.
-
-No remote push or live cloud deployment is implied by these deliverables. Publishing requires a GitHub account with write access and access to the Streamlit workspace.
+Official instructions: [deploy](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy), [manage updates](https://docs.streamlit.io/deploy/streamlit-community-cloud/manage-your-app).

@@ -1,5 +1,15 @@
 # Validation report
 
+## Three-dataset correction — 21 October 2026
+
+- Replaced the Telco-only classification/clustering app tracks with credit-card default classification and meteorite clustering, matching the actual project notebooks.
+- Trained complete pipelines for each independent dataset. Classification retained 29,965 accounts; meteorite cleaning retained 31,929 landings.
+- `python -m pytest -q`: **13 passed** in 9.66 seconds, including different-track schema rejection and independent data provenance.
+- Classification: decision tree depth 5, holdout accuracy 0.8173, weighted F1 0.7978, ROC-AUC 0.7446.
+- Meteorites: K=2, sampled silhouette 0.4881. Regression results unchanged.
+- Prior Telco-only model artifacts and metrics preserved in `models/legacy_telco/`. Original notebooks and data unchanged.
+- App branding, templates, forms, charts, and documentation now distinguish all three datasets.
+
 ## Structured interface update — 21 October 2026
 
 - `python -m pytest -q`: **9 passed** in 4.09 seconds.

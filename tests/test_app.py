@@ -6,74 +6,103 @@ import numpy as np
 import pandas as pd
 import pytest
 from streamlit.testing.v1 import AppTest
-from ml_core import ROOT, FEATURES, CustomerFeatures, predict, validate
+from ml_core import ROOT
+from track_data import (TRACKS, examples, infer, validate_credit, validate_meteorites,
+                        CreditFeatures, MeteoriteFeatures, clean_credit, clean_meteorites)
 
-@pytest.fixture
-def customers():
-    return pd.read_csv(ROOT / 'data' / 'TelcoCustomerChurn.csv').head(5)
-
-@pytest.mark.parametrize('track', ['cltv', 'churn', 'segments'])
-def test_saved_pipeline_batch_single_and_missing(track, customers):
+@pytest.mark.parametrize('track', list(TRACKS))
+def test_saved_pipeline_matches_its_dataset(track):
+    data = examples(track).head(5)
     bundle = joblib.load(ROOT / 'models' / 'app' / f'{track}.joblib')
-    batch = predict(bundle, customers)
-    col = {'cltv': 'PredictedCLTV', 'churn': 'ChurnProbability', 'segments': 'Segment'}[track]
-    assert np.isfinite(batch[col]).all()
-    assert batch[col].iloc[0] == pytest.approx(predict(bundle, customers.head(1))[col].iloc[0])
-    changed = customers.copy()
-    changed['ChurnLabel'] = 'arbitrary outcome'
-    changed['CLTV'] = -999
-    assert np.allclose(predict(bundle, changed)[col], batch[col])
-    changed.loc[0, 'Age'] = np.nan
-    changed.loc[0, 'Contract'] = 'Unknown category'
-    assert np.isfinite(predict(bundle, changed)[col]).all()
-    if track == 'churn':
-        assert batch[col].between(0, 1).all()
-        assert (predict(bundle, customers, threshold=0)['PredictedChurn'] == 'Yes').all()
-
-def test_validation_and_engineering(customers):
+    assert bundle['track'] == track
+    result = infer(bundle, data)
+    field = TRACKS[track]['output']
+    assert np.isfinite(result[field]).all()
+    assert infer(bundle, data.head(1))[field].iloc[0] == pytest.approx(result[field].iloc[0])
+    changed = data.assign(Y=999, CLTV=999, ChurnLabel='irrelevant', id=999)
+    assert np.allclose(infer(bundle, changed)[field], result[field])
+    other = examples('credit' if track != 'credit' else 'meteorites').head(2)
     with pytest.raises(ValueError, match='Missing columns'):
-        validate(customers.drop(columns='Age'))
-    with pytest.raises(ValueError, match='at least one'):
-        validate(customers.head(0))
-    bad = customers.copy()
-    bad['Age'] = 'invalid'
-    with pytest.raises(ValueError, match='finite numbers'):
-        validate(bad)
-    bad['Age'] = -1
-    with pytest.raises(ValueError, match='negative'):
-        validate(bad)
-    customers['TenureinMonths'] = 0
-    transformed = CustomerFeatures().fit_transform(customers)
-    assert transformed.AvgChargePerTenureMonth.isna().all()
-    assert transformed.ServiceCount.between(0, 8).all()
+        infer(bundle, other)
 
-def test_regression_partition_integrity():
-    train = pd.read_csv(ROOT / 'data' / 'regression_train.csv')
-    test = pd.read_csv(ROOT / 'data' / 'regression_test.csv')
-    source = pd.read_csv(ROOT / 'data' / 'regression_dataset.csv')
-    assert len(train) + len(test) == len(source)
-    assert not set(pd.util.hash_pandas_object(train, index=False)) & set(pd.util.hash_pandas_object(test, index=False))
+@pytest.mark.parametrize('track', list(TRACKS))
+def test_csv_template_roundtrip(track):
+    from io import StringIO
+    data = examples(track).head(3)
+    loaded = pd.read_csv(StringIO(data.to_csv(index=False)))
+    bundle = joblib.load(ROOT / 'models' / 'app' / f'{track}.joblib')
+    assert len(infer(bundle, loaded)) == 3
 
-@pytest.mark.parametrize('track', ['Regression · CLTV', 'Classification · Churn', 'Clustering · Segments'])
-def test_streamlit_tracks_and_form(track):
+
+def test_credit_cleaning_features_and_validation():
+    data = clean_credit()
+    assert len(data) == 29965
+    assert not data.duplicated().any()
+    assert data.Y.isin([0, 1]).all()
+    sample = data.head(3).copy()
+    sample['X6'] = -2
+    sample['X12'] = -100
+    validate_credit(sample)
+    features = CreditFeatures().fit(sample)
+    assert 'Avg_Bill_Amount' in features.transform(sample)
+    sample['X1'] = np.nan
+    validate_credit(sample)
+    sample['X2'] = 12
+    with pytest.raises(ValueError, match='category'):
+        validate_credit(sample)
+
+
+def test_meteorite_cleaning_and_limits():
+    data = clean_meteorites()
+    assert len(data) == 31929
+    assert np.isfinite(MeteoriteFeatures().fit_transform(data)).all().all()
+    sample = data.head(1).copy()
+    sample['reclat'] = -40
+    sample['reclong'] = -120
+    validate_meteorites(sample)
+    sample[['reclat', 'reclong']] = 0
+    with pytest.raises(ValueError, match='0, 0'):
+        validate_meteorites(sample)
+    sample['reclat'] = 100
+    with pytest.raises(ValueError, match='Latitude'):
+        validate_meteorites(sample)
+    sample['reclat'] = 40
+    sample['year'] = 2027
+    with pytest.raises(ValueError, match='Year'):
+        validate_meteorites(sample)
+    sample['year'] = np.nan
+    with pytest.raises(ValueError, match='required'):
+        validate_meteorites(sample)
+
+@pytest.mark.parametrize('track', list(TRACKS))
+def test_app_track_examples_form_upload_and_dataset_labels(track):
     app = AppTest.from_file(str(ROOT / 'streamlit_app.py')).run(timeout=30)
-    app.sidebar.radio[0].set_value(track).run()
+    app.sidebar.radio[0].set_value(TRACKS[track]['nav']).run()
     assert not app.exception
-    assert len(app.dataframe) >= 1
-    app.main.radio[0].set_value('Single customer').run()
+    assert len(app.success) == 1
+    assert TRACKS[track]['file'] in app.success[0].value
+    app.main.radio[0].set_value('Single record').run()
     app.button[0].click().run()
     assert not app.exception
     assert len(app.success) == 1
     app.main.radio[0].set_value('Upload CSV').run()
     assert not app.exception
 
-def test_churn_result_persists_when_threshold_changes():
+
+def test_credit_threshold_preserves_submitted_record():
     app = AppTest.from_file(str(ROOT / 'streamlit_app.py')).run(timeout=30)
-    app.sidebar.radio[0].set_value('Classification · Churn').run()
-    app.main.radio[0].set_value('Single customer').run()
+    app.sidebar.radio[0].set_value(TRACKS['credit']['nav']).run()
+    app.main.radio[0].set_value('Single record').run()
     app.button[0].click().run()
-    assert len(app.success) == 1
-    app.slider[0].set_value(0.9).run()
+    app.slider[0].set_value(.9).run()
     assert not app.exception
     assert len(app.success) == 1
-    assert 'submitted_churn' in app.session_state
+    assert 'submitted_credit' in app.session_state
+
+
+def test_provenance_datasets_are_distinct():
+    import json
+    reports = json.loads((ROOT / 'models' / 'app' / 'metrics.json').read_text(encoding='utf-8'))
+    assert len({reports[t]['data_sha256'] for t in TRACKS}) == 3
+    for track in TRACKS:
+        assert reports[track]['dataset'] == TRACKS[track]['file']

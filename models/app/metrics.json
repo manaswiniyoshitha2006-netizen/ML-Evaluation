@@ -4,58 +4,101 @@
     "test_rows": 1409,
     "r2": 0.20524639020107216,
     "mae": 896.4985550260064,
-    "rmse": 1058.519686343137
+    "rmse": 1058.519686343137,
+    "dataset": "TelcoCustomerChurn.csv",
+    "data_sha256": "f17c639786c8ed5d264093f0cb42ee5ec3745e30579b3c747d239c6301c5a800",
+    "method": "Gradient Boosting Regressor"
   },
-  "churn": {
-    "train_rows": 5634,
-    "test_rows": 1409,
-    "accuracy": 0.8452803406671399,
-    "precision": 0.7422360248447205,
-    "recall": 0.6390374331550802,
-    "f1": 0.6867816091954023,
-    "roc_auc": 0.9094577488439382,
+  "credit": {
+    "rows": 29965,
+    "train_rows": 23972,
+    "test_rows": 5993,
+    "selected_parameters": {
+      "model__max_depth": 5
+    },
+    "cv_weighted_f1": 0.7978045776157713,
+    "accuracy": 0.8172868346404139,
+    "precision": 0.6517739816031537,
+    "recall": 0.3740573152337858,
+    "f1": 0.4753234307618591,
+    "weighted_f1": 0.7977687698670646,
+    "roc_auc": 0.7446439669306103,
     "confusion_matrix": [
       [
-        952,
-        83
+        4402,
+        265
       ],
       [
-        135,
-        239
+        830,
+        496
       ]
-    ]
+    ],
+    "dataset": "default of credit card clients.csv",
+    "data_sha256": "d5f9226c59206c15d5940feb7ac17fb2060bf9cb2cb1b36fb20c096f050b5a56",
+    "method": "Decision Tree Classifier"
   },
-  "segments": {
-    "rows": 7043,
-    "selected_k": 6,
+  "meteorites": {
+    "raw_rows": 45716,
+    "rows": 31929,
+    "excluded_rows": 13787,
+    "selected_k": 2,
     "candidates": [
       {
         "k": 2,
-        "silhouette": 0.2942322763649434
+        "silhouette": 0.48812012894921036,
+        "inertia": 76351.74767868896
       },
       {
         "k": 3,
-        "silhouette": 0.2800099609592549
+        "silhouette": 0.477390178118009,
+        "inertia": 55158.49912931327
       },
       {
         "k": 4,
-        "silhouette": 0.2875309111826962
+        "silhouette": 0.4186230913833546,
+        "inertia": 41078.93337737522
       },
       {
         "k": 5,
-        "silhouette": 0.29019957138756153
+        "silhouette": 0.4180234522353511,
+        "inertia": 36496.764808859676
       },
       {
         "k": 6,
-        "silhouette": 0.3014396355184922
+        "silhouette": 0.40557376567250747,
+        "inertia": 32296.271015025915
+      },
+      {
+        "k": 7,
+        "silhouette": 0.39061282858269736,
+        "inertia": 28683.33899421835
+      },
+      {
+        "k": 8,
+        "silhouette": 0.3621045946381637,
+        "inertia": 26203.452607847667
+      },
+      {
+        "k": 9,
+        "silhouette": 0.4112352495316564,
+        "inertia": 24122.706556597324
+      },
+      {
+        "k": 10,
+        "silhouette": 0.41707824820352746,
+        "inertia": 22072.460816658066
       }
     ],
-    "davies_bouldin": 1.1097165426728648
+    "silhouette": 0.48812012894921036,
+    "davies_bouldin": 1.0375547615379146,
+    "analysis_year": 2026,
+    "dataset": "Meteorite_Landings.csv",
+    "data_sha256": "18789de71193754a0cd2e66cc9fd78e750a12778a2075353fc1da66c3037bdcf",
+    "method": "K-Means"
   },
   "provenance": {
     "python": "3.11.9",
     "sklearn": "1.5.0",
-    "data_sha256": "f17c639786c8ed5d264093f0cb42ee5ec3745e30579b3c747d239c6301c5a800",
     "seed": 42,
     "supervised_refit_on_holdout": false
   }

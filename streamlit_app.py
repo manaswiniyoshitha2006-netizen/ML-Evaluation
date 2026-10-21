@@ -1,69 +1,69 @@
+"""Structured application for three independent ML capstone datasets."""
 import json
+from html import escape
 import altair as alt
 import joblib
-import pandas as pd
 import numpy as np
+import pandas as pd
 import streamlit as st
-from ml_core import ROOT, FEATURES, NUMERIC, predict
-from ui_helpers import CSS, HELP, INTEGERS, SEGMENTS, label as display_label
+from ml_core import ROOT
+from track_data import TRACKS, examples, infer
+from track_ui import label, help_text, groups, CHOICES, CODES, STATUS, INTEGERS
+from ui_helpers import CSS
 
-st.set_page_config(page_title='Telco Customer Insights', page_icon='📊', layout='wide', initial_sidebar_state='expanded')
-st.markdown(CSS, unsafe_allow_html=True)
-st.sidebar.markdown('### ◈ TELCO INSIGHTS')
-st.sidebar.caption('CUSTOMER INTELLIGENCE WORKSPACE')
-st.sidebar.divider()
 MODELS = ROOT / 'models' / 'app'
+st.set_page_config(page_title='ML Capstone Explorer', page_icon=':bar_chart:', layout='wide', initial_sidebar_state='expanded')
+st.markdown(CSS, unsafe_allow_html=True)
 
 @st.cache_resource
-def load_bundle(track):
+def load_model(track, modified):
     return joblib.load(MODELS / f'{track}.joblib')
 
 @st.cache_data
-def sample_data():
-    return pd.read_csv(ROOT / 'data' / 'TelcoCustomerChurn.csv')[FEATURES]
+def load_examples(track):
+    return examples(track)
 
-track_name = st.sidebar.radio('Choose your analysis', ['Regression · CLTV', 'Classification · Churn', 'Clustering · Segments'])
-track = {'Regression · CLTV': 'cltv', 'Classification · Churn': 'churn', 'Clustering · Segments': 'segments'}[track_name]
-titles = {
-    'cltv': ('Customer lifetime value', 'Estimate customer value from account history, billing, and service usage. Compare customers and export your results.'),
-    'churn': ('Customer churn analysis', 'Estimate historical churn risk, explore which customers cross your chosen threshold, and prepare a review list.'),
-    'segments': ('Customer segmentation', 'Group customers by spending, tenure, and service usage. Understand each group before exploring individual assignments.')
-}
-heading, description = titles[track]
-st.markdown(f'<div class="hero"><div class="eyebrow">TELCO INSIGHTS / CUSTOMER INTELLIGENCE</div><h1>{heading}</h1><p>{description}</p></div>', unsafe_allow_html=True)
+st.sidebar.markdown('### ML CAPSTONE EXPLORER')
+st.sidebar.caption('THREE TASKS / THREE DATASETS')
 st.sidebar.divider()
+nav = st.sidebar.radio('Choose your analysis', [v['nav'] for v in TRACKS.values()])
+track = next(k for k, v in TRACKS.items() if v['nav'] == nav)
+config = TRACKS[track]
+st.sidebar.divider()
+st.sidebar.markdown('**Active dataset**')
+st.sidebar.caption(config['file'])
 st.sidebar.markdown('**Your workflow**')
-st.sidebar.caption('01  Choose an analysis\n\n02  Add customer details\n\n03  Explore and export results')
-st.sidebar.divider()
-st.sidebar.caption('Built on 7,043 Telco customers.\nModels run locally on the server.')
+st.sidebar.caption('01  Choose a task\n\n02  Provide the matching input\n\n03  Interpret and export')
+
+st.markdown(f'<div class="hero"><div class="eyebrow">ML CAPSTONE / {escape(track.upper())}</div><h1>{config["title"]}</h1><p>{config["description"]}</p></div>', unsafe_allow_html=True)
+st.caption(f"Dataset: {config['file']}  |  Method: {config['method']}")
 try:
-    bundle = load_bundle(track)
-    metrics = json.loads((MODELS / 'metrics.json').read_text())
-except (FileNotFoundError, ValueError, ImportError) as exc:
-    st.error(f'Model files are unavailable. Run python train_models.py with the pinned requirements. {exc}')
+    bundle = load_model(track, (MODELS / f'{track}.joblib').stat().st_mtime_ns)
+    report = json.loads((MODELS / 'metrics.json').read_text(encoding='utf-8-sig'))[track]
+    samples = load_examples(track)
+except (FileNotFoundError, ValueError, ImportError, KeyError) as exc:
+    st.error(f'Matching model artifacts are unavailable. Run python train_models.py with the pinned requirements. {exc}')
     st.stop()
 
-analysis_tab, model_tab, guide_tab = st.tabs(['Analyze customers', 'Model performance', 'User guide'])
-with analysis_tab:
-    st.markdown('<div class="section-title"><span class="step">1</span>Add your customers</div>', unsafe_allow_html=True)
-    st.caption('Start with a sample, enter one customer, or upload a CSV. Results appear below your inputs.')
-    threshold = 0.5
-    if track == 'churn':
-        with st.expander('Adjust churn decision threshold', expanded=False):
-            st.caption('A score at or above this threshold is flagged Yes. Lowering it flags more customers; it does not change the model score.')
-            threshold = st.slider('Flag customers at or above', 0.05, 0.95, 0.5, 0.05, format='%.2f')
-    mode = st.radio('Input method', ['Example customers', 'Single customer', 'Upload CSV'], horizontal=True)
-    samples = sample_data()
+analysis, performance, guide = st.tabs(['Run analysis', 'Model performance', 'Dataset & user guide'])
+with analysis:
+    st.markdown('<div class="section-title"><span class="step">1</span>Provide your input</div>', unsafe_allow_html=True)
+    st.caption(f"Every row must describe one {config['entity']}. This track accepts only the {config['file']} input schema.")
+    threshold = .5
+    if track == 'credit':
+        with st.expander('Default classification threshold'):
+            st.caption('A default score at or above this threshold receives a Yes label. Performance metrics use 0.50.')
+            threshold = st.slider('Flag accounts at or above', .05, .95, .5, .05)
+    mode = st.radio('Input method', ['Example records', 'Single record', 'Upload CSV'], horizontal=True)
     frame = None
-    values = {}
-    if mode == 'Example customers':
-        sample_size = st.select_slider('Customers to explore', options=[10, 25, 50, 100], value=25)
-        frame = samples.sample(sample_size, random_state=42).reset_index(drop=True)
-        st.caption('A reproducible sample from the included dataset. Adjust the size to explore a broader portfolio.')
+    if mode == 'Example records':
+        count = st.select_slider('Records to explore', [10, 25, 50, 100], value=25)
+        frame = samples.sample(count, random_state=42).reset_index(drop=True)
+        st.caption(f'A reproducible sample from {len(samples):,} usable source records. Example records are exploratory and may have been used during training.')
     elif mode == 'Upload CSV':
-        st.caption('1. Download the template.  2. Keep the column headers and replace the example rows.  3. Upload your completed file.')
-        st.download_button('Download input template', samples.head(3).to_csv(index=False), 'customer_template.csv', 'text/csv')
-        upload = st.file_uploader('Customer CSV (maximum 10,000 rows)', type=['csv'])
+        st.caption('Download this track\'s template, replace the example rows, keep the headers, then upload. Other tracks use different templates.')
+        st.download_button('Download input template', samples.head(3).to_csv(index=False), f'{track}_template.csv', 'text/csv')
+        upload = st.file_uploader('CSV file / up to 10,000 rows and 10 MB', type=['csv'], key=f'upload_{track}')
         if upload is not None:
             try:
                 frame = pd.read_csv(upload, nrows=10001)
@@ -73,185 +73,155 @@ with analysis_tab:
             except (ValueError, UnicodeDecodeError, pd.errors.ParserError) as exc:
                 st.error(f'Cannot read this CSV: {exc}')
     else:
-        st.caption('Fields start with one example customer. Replace them with the actual account details before submitting.')
-        default_customer = samples.iloc[0].fillna({'Offer': 'No Offer', 'InternetType': 'No Internet'})
-        with st.form('customer', clear_on_submit=False):
+        st.caption('The form starts with an example record. Review each section and submit to update the result.')
+        default = samples.iloc[0].fillna({'Offer': 'No Offer', 'InternetType': 'No Internet'})
+        with st.form(f'form_{track}'):
             values = {}
-            groups = {
-                'Customer profile': ['Age', 'Gender', 'SeniorCitizen', 'Married', 'NumberofDependents', 'Number_of_Referrals'],
-                'Account & billing': ['TenureinMonths', 'Offer', 'Contract', 'PaperlessBilling', 'PaymentMethod', 'MonthlyCharge', 'TotalCharges', 'TotalRefunds', 'TotalExtraDataCharges', 'TotalLongDistanceCharges', 'AvgMonthlyLongDistanceCharges'],
-                'Services & usage': [f for f in FEATURES if f not in ['Age', 'Gender', 'SeniorCitizen', 'Married', 'NumberofDependents', 'Number_of_Referrals', 'TenureinMonths', 'Offer', 'Contract', 'PaperlessBilling', 'PaymentMethod', 'MonthlyCharge', 'TotalCharges', 'TotalRefunds', 'TotalExtraDataCharges', 'TotalLongDistanceCharges', 'AvgMonthlyLongDistanceCharges']]
-            }
-            st.caption('Review the three sections below, then run the analysis. All sections start with example values.')
-            form_tabs = st.tabs(list(groups))
-            for section, (group, fields) in zip(form_tabs, groups.items()):
+            field_groups = groups(track)
+            for section, fields in zip(st.tabs(list(field_groups)), field_groups.values()):
                 with section:
-                    columns = st.columns(3)
-                    for i, feature in enumerate(fields):
-                        with columns[i % 3]:
-                            if feature in NUMERIC:
-                                values[feature] = st.number_input(display_label(feature), min_value=0 if feature in INTEGERS else 0.0,
-                                                                value=int(default_customer[feature]) if feature in INTEGERS else float(default_customer[feature]),
-                                                                step=1 if feature in INTEGERS else 0.01,
-                                                                help=HELP.get(feature), key=f'{track}_{feature}')
+                    columns = st.columns(2 if track == 'meteorites' else 3)
+                    for i, field in enumerate(fields):
+                        with columns[i % len(columns)]:
+                            key = f'{track}_{field}'
+                            if track == 'credit' and field in CHOICES:
+                                choices = CHOICES[field]
+                                descriptions = CODES.get(field, STATUS)
+                                values[field] = st.selectbox(label(track, field), choices, index=choices.index(int(default[field])),
+                                    format_func=lambda v, desc=descriptions: f'{v}: {desc[v]}', help=help_text(track, field), key=key)
+                            elif field not in config['numeric']:
+                                choices = sorted(samples[field].dropna().unique().tolist())
+                                if field in ['Offer', 'InternetType']:
+                                    choices = sorted(set(choices + ['No Offer' if field == 'Offer' else 'No Internet']))
+                                values[field] = st.selectbox(label(track, field), choices, index=choices.index(default[field]), help=help_text(track, field), key=key)
                             else:
-                                choices = sorted(samples[feature].dropna().unique().tolist())
-                                if feature in ['Offer', 'InternetType']:
-                                    choices = sorted(set(choices + ['No Offer' if feature == 'Offer' else 'No Internet']))
-                                values[feature] = st.selectbox(display_label(feature), choices, index=choices.index(default_customer[feature]),
-                                                             help=HELP.get(feature), key=f'{track}_{feature}')
-            if st.form_submit_button('Run customer analysis', type='primary', use_container_width=True):
+                                integer = field in INTEGERS if track == 'cltv' else field in ['X5', 'year']
+                                lower, upper = (0, None) if integer else (0., None)
+                                if track == 'credit' and field.startswith('X') and 12 <= int(field[1:]) <= 17:
+                                    lower = None
+                                if track == 'meteorites':
+                                    lower, upper = {'mass (g)': (0., None), 'year': (0, 2026), 'reclat': (-90., 90.), 'reclong': (-180., 180.)}[field]
+                                values[field] = st.number_input(label(track, field), min_value=lower, max_value=upper,
+                                    value=int(default[field]) if integer else float(default[field]),
+                                    step=1 if integer else .01, help=help_text(track, field), key=key)
+            if st.form_submit_button('Run analysis', type='primary', use_container_width=True):
                 st.session_state[f'submitted_{track}'] = pd.DataFrame([values])
         frame = st.session_state.get(f'submitted_{track}')
         if frame is not None:
-            st.caption('Showing the last submitted customer. After editing fields, select Run customer analysis to refresh the result.')
+            st.caption('Showing the last submitted record. Submit again after editing fields.')
 
     if frame is not None:
         try:
-            result = predict(bundle, frame, threshold)
-            st.success(f'Processed {len(result):,} customer(s).')
-            st.markdown('<div class="section-title"><span class="step">2</span>Understand your results</div>', unsafe_allow_html=True)
-            summary = st.columns(3)
-            summary[0].metric('Customers scored', f'{len(result):,}')
+            result = infer(bundle, frame, threshold)
+            st.success(f'Analyzed {len(result):,} record(s) using {config["file"]}.')
+            st.markdown('<div class="section-title"><span class="step">2</span>Understand the result</div>', unsafe_allow_html=True)
+            columns = st.columns(3)
+            columns[0].metric('Records analyzed', f'{len(result):,}')
             if track == 'cltv':
-                summary[1].metric('Average predicted CLTV', f"{result.PredictedCLTV.mean():,.0f}")
-                summary[2].metric('Highest predicted CLTV', f"{result.PredictedCLTV.max():,.0f}")
-                st.caption('CLTV currency and forecast horizon are unspecified in the source. Consider the holdout error when interpreting estimates.')
-            elif track == 'churn':
-                summary[1].metric('Average churn score', f"{result.ChurnProbability.mean():.1%}")
-                summary[2].metric('Above chosen threshold', str(int((result.PredictedChurn == 'Yes').sum())))
-                st.caption('Historical classification scores are not calibrated future probabilities. The threshold controls the Yes/No decision.')
+                columns[1].metric('Average predicted CLTV', f'{result.PredictedCLTV.mean():,.0f}')
+                columns[2].metric('Highest predicted CLTV', f'{result.PredictedCLTV.max():,.0f}')
+                interpretation = f"Estimated values use the source dataset's CLTV units. Currency and forecast horizon are unspecified. Average absolute holdout error: {report['mae']:,.0f}."
+            elif track == 'credit':
+                columns[1].metric('Average default score', f'{result.DefaultScore.mean():.1%}')
+                columns[2].metric('Predicted default: Yes', str(int(result.PredictedDefault.eq('Yes').sum())))
+                interpretation = f"At threshold {threshold:.0%}, Yes means predicted default payment next month. Scores are not calibrated probabilities. This academic model is not a lending or credit-eligibility decision system."
             else:
-                summary[1].metric('Groups represented', str(result.Segment.nunique()))
-                summary[2].metric('Largest group', f"Segment {result.Segment.mode().iloc[0]}")
-                st.caption('Segment IDs describe groups; they are not rankings.')
+                columns[1].metric('Clusters represented', str(result.Cluster.nunique()))
+                columns[2].metric('Largest cluster', f'Cluster {result.Cluster.mode().iloc[0]}')
+                interpretation = 'Clusters summarize similarity in log mass, year, and standardized coordinates. IDs are not rankings or meteorite types. Latitude/longitude use Euclidean distance here, not great-circle distance.'
             if len(result) == 1:
-                if track == 'cltv':
-                    message = f"Estimated lifetime value: <b>{result.PredictedCLTV.iloc[0]:,.0f}</b> in the dataset's value units. The model's average absolute holdout error is {metrics['cltv']['mae']:,.0f}; this is a broad estimate, not a guaranteed value."
-                elif track == 'churn':
-                    flag = result.PredictedChurn.iloc[0] == 'Yes'
-                    message = f"This customer's churn score is <b>{result.ChurnProbability.iloc[0]:.1%}</b>. At your {threshold:.0%} threshold, the customer is <b>{'flagged for review' if flag else 'below the review threshold'}</b>. This is a model score, not a certainty that the customer will leave."
+                interpretation = ('Predicted CLTV: ' + f'{result.PredictedCLTV.iloc[0]:,.0f}. ' if track == 'cltv' else
+                                  f'Default score: {result.DefaultScore.iloc[0]:.1%}; predicted default: {result.PredictedDefault.iloc[0]}. ' if track == 'credit' else
+                                  f'This landing is assigned to Cluster {int(result.Cluster.iloc[0])}. ') + interpretation
+            st.markdown(f'<div class="result-note">{interpretation}</div>', unsafe_allow_html=True)
+            visual, records = st.tabs(['Visual summary', 'Records & export'])
+            with visual:
+                if track == 'meteorites':
+                    counts = result.groupby('Cluster').size().reset_index(name='Records')
+                    chart = alt.Chart(counts).mark_bar(color='#238b91', cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(x='Cluster:O', y='Records:Q', tooltip=['Cluster', 'Records'])
+                    st.altair_chart(chart.properties(height=240), use_container_width=True)
+                    st.markdown('#### Landing coordinates')
+                    st.caption('Coordinate overview of the submitted records. Color represents assigned cluster.')
+                    chart = alt.Chart(result[['reclong', 'reclat', 'Cluster']]).mark_circle(size=70, opacity=.7).encode(
+                        x=alt.X('reclong:Q', title='Longitude', scale=alt.Scale(domain=[-180, 180])),
+                        y=alt.Y('reclat:Q', title='Latitude', scale=alt.Scale(domain=[-90, 90])), color='Cluster:N', tooltip=['reclat', 'reclong', 'Cluster'])
+                    # Aggregate duplicate points to keep full uploads below the chart row limit.
+                    points = result.groupby(['reclong', 'reclat', 'Cluster']).size().reset_index(name='Records')
+                    if len(points) > 5000:
+                        st.caption('Coordinate chart shows a fixed sample of 5,000 points; all rows remain in summaries and exports.')
+                        points = points.sample(5000, random_state=42)
+                    st.altair_chart(chart.properties(data=points, height=280), use_container_width=True)
                 else:
-                    segment = int(result.Segment.iloc[0])
-                    message = f"This customer belongs to <b>Segment {segment}: {SEGMENTS[segment]}</b>. Compare the group profile below to understand its typical characteristics. Individual customers can differ from the group average."
-                st.markdown(f'<div class="result-note">{message}</div>', unsafe_allow_html=True)
-            overview_tab, records_tab = st.tabs(['Visual summary', 'Customer records & export'])
-            with overview_tab:
-                chart_area, details = st.columns([2, 1])
-                with chart_area:
-                    if track == 'segments':
-                        st.markdown('#### Customers by segment')
-                        counts = result.groupby('Segment').size().reset_index(name='Customers')
-                        chart = alt.Chart(counts).mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6).encode(
-                            x=alt.X('Segment:O', title='Customer segment'), y='Customers:Q',
-                            color=alt.Color('Segment:O', scale=alt.Scale(scheme='tealblues'), legend=None), tooltip=['Segment', 'Customers'])
+                    field = config['output']
+                    title = 'Predicted CLTV' if track == 'cltv' else 'Default score'
+                    if len(result) == 1:
+                        chart = alt.Chart(result[[field]]).mark_bar(color='#238b91', size=45).encode(
+                            x=alt.X(f'{field}:Q', title=title, scale=alt.Scale(domain=[0, 1]) if track == 'credit' else alt.Scale(zero=True)), tooltip=[field])
                     else:
-                        field = 'PredictedCLTV' if track == 'cltv' else 'ChurnProbability'
-                        label = 'Predicted customer value' if track == 'cltv' else 'Churn score'
-                        st.markdown('#### ' + (label if len(result) == 1 else label + ' distribution'))
-                        if len(result) == 1:
-                            chart = alt.Chart(result[[field]]).mark_bar(color='#238b91', size=48, cornerRadiusEnd=6).encode(
-                                x=alt.X(f'{field}:Q', title=label, scale=alt.Scale(domain=[0, 1]) if track == 'churn' else alt.Scale(zero=True)),
-                                tooltip=[alt.Tooltip(f'{field}:Q', title=label)])
-                        else:
-                            # Aggregate before plotting so full 10,000-row uploads stay below Altair's row limit.
-                            counts, edges = np.histogram(result[field], bins=15)
-                            histogram = pd.DataFrame({'From': edges[:-1], 'To': edges[1:], 'Customers': counts})
-                            chart = alt.Chart(histogram).mark_bar(color='#238b91', cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
-                                x=alt.X('From:Q', title=label, bin='binned'), x2='To:Q',
-                                y=alt.Y('Customers:Q', title='Customers'), tooltip=['From', 'To', 'Customers'])
-                        if track == 'churn':
-                            rule = alt.Chart(pd.DataFrame({'Threshold': [threshold]})).mark_rule(color='#e18a46', strokeDash=[5, 4], size=2).encode(x='Threshold:Q', tooltip=['Threshold'])
-                            chart = chart + rule
-                    st.altair_chart(chart.properties(height=290).configure_view(strokeWidth=0), use_container_width=True)
-                with details:
-                    st.markdown('#### Reading this view')
-                    st.write({'cltv': 'The chart shows estimated value for your selected customers. For multiple customers, bars count predictions within each value range. Interpret estimates alongside the model’s measured error.',
-                              'churn': 'The orange line marks your decision threshold. Customers at or above it receive a Yes label. Change the threshold to explore how the flagged group changes.',
-                              'segments': 'Each bar counts customers assigned to a group. Compare the profiles below to understand the spending and service patterns behind each segment.'}[track])
-                    st.download_button('↓ Export predictions', result.to_csv(index=False), f'{track}_predictions.csv', 'text/csv', use_container_width=True)
-            with records_tab:
-                st.markdown('#### Customer records')
-                st.caption('Predictions appear first. Download the full CSV to retain the original column names for further analysis.')
-                predictions = {'cltv': ['PredictedCLTV'], 'churn': ['ChurnProbability', 'PredictedChurn'], 'segments': ['Segment']}[track]
-                ordered = predictions + [c for c in result.columns if c not in predictions]
+                        counts, edges = np.histogram(result[field], bins=15)
+                        data = pd.DataFrame({'From': edges[:-1], 'To': edges[1:], 'Records': counts})
+                        chart = alt.Chart(data).mark_bar(color='#238b91').encode(x=alt.X('From:Q', bin='binned', title=title), x2='To:Q', y='Records:Q', tooltip=['From', 'To', 'Records'])
+                    if track == 'credit':
+                        rule = alt.Chart(pd.DataFrame({'Threshold': [threshold]})).mark_rule(color='#df8e45', strokeDash=[5, 4]).encode(x='Threshold:Q')
+                        chart = chart + rule
+                    st.altair_chart(chart.properties(height=260), use_container_width=True)
+                    st.caption('For multiple records, bars count predictions within each range. The orange line, when shown, marks the classification threshold.')
+            with records:
+                output = [config['output']] + (['PredictedDefault'] if track == 'credit' else [])
+                ordered = output + [c for c in result if c not in output]
                 st.dataframe(result[ordered], hide_index=True, use_container_width=True,
-                             column_config={**{c: st.column_config.Column(display_label(c)) for c in ordered},
-                                            'ChurnProbability': st.column_config.ProgressColumn('Churn score (0–1)', min_value=0, max_value=1, format='%.2f'),
-                                            'PredictedCLTV': st.column_config.NumberColumn('Predicted CLTV', format='%.0f')})
+                    column_config={c: st.column_config.Column(label(track, c)) for c in ordered})
                 st.download_button('Download complete results', result.to_csv(index=False), f'{track}_results.csv', 'text/csv', type='primary')
         except (ValueError, TypeError) as exc:
             st.error(str(exc))
+    if track == 'meteorites':
+        st.markdown('### Full-dataset cluster profiles')
+        st.caption('Feature medians and record counts describe the cleaned source dataset, rather than only your submitted records.')
+        st.dataframe(pd.read_csv(MODELS / 'meteorite_profiles.csv').rename(columns={c: label(track, c) for c in config['features']}), hide_index=True, use_container_width=True)
 
-    if track == 'segments':
-        st.markdown('<div class="section-title"><span class="step">3</span>Understand the customer groups</div>', unsafe_allow_html=True)
-        st.caption('These profiles describe the full source dataset, not just the customers scored above.')
-        profiles = pd.read_csv(MODELS / 'segment_profiles.csv')
-        profiles['Group description'] = profiles.Segment.map(SEGMENTS)
-        profile_chart = alt.Chart(profiles).mark_circle(opacity=0.85).encode(
-            x=alt.X('TenureinMonths:Q', title='Average tenure (months)'),
-            y=alt.Y('MonthlyCharge:Q', title='Average monthly charge'),
-            size=alt.Size('Customers:Q', scale=alt.Scale(range=[250, 1800])),
-            color=alt.Color('Segment:N', scale=alt.Scale(scheme='tealblues')),
-            tooltip=['Segment', 'Group description', 'Customers', 'TenureinMonths', 'MonthlyCharge', 'ServiceCount'])
-        st.altair_chart(profile_chart.properties(height=300).configure_view(strokeWidth=0), use_container_width=True)
-        st.caption('Each bubble is a segment. Its size represents the number of customers in the full training population.')
-        st.dataframe(profiles.rename(columns={c: display_label(c) for c in profiles.columns}), hide_index=True, use_container_width=True)
-with model_tab:
-    st.subheader('How reliable is this model?')
-    st.caption('Evaluation describes the fitted model. These numbers do not measure confidence for an individual customer.')
-    st.markdown('**Method:** ' + {'cltv': 'Gradient Boosting Regressor', 'churn': 'Gradient Boosting Classifier', 'segments': 'K-Means with scaled customer features'}[track])
-    evaluation = metrics[track]
+with performance:
+    st.subheader('How was this model evaluated?')
+    st.markdown(f"**Dataset:** {config['file']}  \n**Method:** {config['method']}")
     if track == 'cltv':
-        stats = [('Holdout R²', f"{evaluation['r2']:.3f}"), ('Typical absolute error', f"{evaluation['mae']:,.0f}"), ('Training customers', f"{evaluation['train_rows']:,}")]
-    elif track == 'churn':
-        stats = [('Holdout ROC-AUC', f"{evaluation['roc_auc']:.3f}"), ('Holdout precision', f"{evaluation['precision']:.1%}"), ('Holdout recall', f"{evaluation['recall']:.1%}")]
+        stats = [('Holdout R-squared', f"{report['r2']:.3f}"), ('Mean absolute error', f"{report['mae']:,.0f}"), ('Test records', f"{report['test_rows']:,}")]
+    elif track == 'credit':
+        stats = [('Holdout ROC-AUC', f"{report['roc_auc']:.3f}"), ('Default precision', f"{report['precision']:.1%}"), ('Default recall', f"{report['recall']:.1%}")]
     else:
-        stats = [('Customer groups', str(evaluation['selected_k'])), ('Customers analyzed', f"{evaluation['rows']:,}"), ('Sample silhouette', f"{max(c['silhouette'] for c in evaluation['candidates']):.3f}")]
-    for column, (label, value) in zip(st.columns(3), stats):
-        column.metric(label, value)
-
-    st.write('')
+        stats = [('Selected clusters', str(report['selected_k'])), ('Retained landings', f"{report['rows']:,}"), ('Sample silhouette', f"{report['silhouette']:.3f}")]
+    for col, (name, value) in zip(st.columns(3), stats):
+        col.metric(name, value)
     if track == 'cltv':
-        st.markdown('**What the numbers mean**')
-        st.write('R-squared measures how much variation in customer value the model explains on held-out customers. A value of 0.205 means about 20.5% of the variation is explained. The model has limited predictive strength.')
-        st.write('Typical absolute error is the average gap between a prediction and the recorded value. It is not a prediction interval. Currency and the value forecast horizon are unspecified in the source data.')
-        st.info('Use this track to demonstrate and compare estimates. Avoid treating a single prediction as an exact customer valuation.')
-    elif track == 'churn':
-        st.markdown('**What the numbers mean**')
-        st.write('ROC-AUC measures how well the model ranks historical churners above other customers. Precision measures how many flagged customers actually churned. Recall measures how many actual churners were flagged.')
-        st.caption('Precision and recall shown here use the default 0.50 threshold on the held-out test set. They do not update when you change the scoring threshold.')
-        matrix = pd.DataFrame(metrics['churn']['confusion_matrix'], index=['Actually stayed', 'Actually churned'], columns=['Predicted stay', 'Predicted churn'])
-        st.markdown('#### Test-set outcomes at threshold 0.50')
+        st.write('R-squared measures variation explained on held-out customers. The model explains about 20.5% here. Mean absolute error measures the average prediction gap, not an uncertainty interval. This model has limited predictive strength.')
+        st.caption('Uses the existing regression_train.csv and regression_test.csv partition. SatisfactionScore and churn-related outcomes are excluded.')
+    elif track == 'credit':
+        st.write('ROC-AUC measures the ability to rank defaults above non-defaults. Precision is the share of flagged accounts that actually defaulted; recall is the share of actual defaults flagged. Metrics use threshold 0.50, independently of your current threshold.')
+        matrix = pd.DataFrame(report['confusion_matrix'], index=['Actually no default', 'Actually default'], columns=['Predicted no default', 'Predicted default'])
         st.dataframe(matrix, use_container_width=True)
+        st.caption('Stratified 80/20 split, seed 42. Five-fold weighted-F1 depth selection. Clipping, imputation, encoding, and scaling are fitted within each training fold.')
     else:
-        st.markdown('**What the numbers mean**')
-        st.write('Silhouette compares how similar customers are within their group versus other groups. Higher is better, with a maximum of 1. The observed score suggests overlapping groups, rather than completely separate customer types.')
-        st.write('Two to six groups were compared using the same sampled customers. Six had the highest sampled silhouette score. Clustering is descriptive; it does not predict a verified customer label.')
-        st.dataframe(pd.DataFrame(metrics['segments']['candidates']).rename(columns={'k': 'Number of groups', 'silhouette': 'Sample silhouette score'}), hide_index=True)
-    with st.expander('Technical details and training report'):
-        st.json(metrics[track])
-        st.write('Supervised preprocessing is fitted only on training rows. Outcome fields, identifiers, CLTV, ChurnScore, and SatisfactionScore are excluded from model inputs. Segmentation is fitted on the complete customer population.')
+        st.write('Silhouette compares within-cluster similarity to separation between clusters. Higher is better. K=2 through K=10 were compared on the same 1,500 sampled records. Clustering is descriptive, with no verified target labels.')
+        st.dataframe(pd.DataFrame(report['candidates']), hide_index=True)
+        st.caption(f"Excluded {report['excluded_rows']:,} of {report['raw_rows']:,} records using the notebook's missing-data, mass, coordinate, year, and (0, 0) location rules.")
+    with st.expander('Complete evaluation and provenance'):
+        st.json(report)
 
-with guide_tab:
-    st.subheader('From customer details to a useful result')
-    cards = [
-        ('01 / Choose the question', 'Customer value estimates CLTV. Churn analysis flags customers for review. Segmentation assigns customers to groups with similar usage and spending.'),
-        ('02 / Provide customer data', 'Use a reproducible sample to explore, enter a single account, or download the CSV template and replace its example rows with your data.'),
-        ('03 / Interpret and export', 'Read the summary, inspect the charts, and open Customer records & export for individual predictions. Review Model performance before presenting conclusions.')
-    ]
-    for col, (title, body) in zip(st.columns(3), cards):
-        col.markdown(f'<div class="guide-card"><h4>{title}</h4><p>{body}</p></div>', unsafe_allow_html=True)
-    st.write('')
-    with st.expander('What does each analysis tell me?', expanded=True):
-        st.markdown('**Customer lifetime value (CLTV)**: a numerical estimate of the value recorded for a customer in this dataset.\n\n**Churn score**: a score from 0 to 1 used to classify historical churn risk. It is not a calibrated future probability.\n\n**Customer segment**: a group based on service usage, spending, tenure, and referrals. Group numbers indicate identity, not quality or rank.')
-    with st.expander('How should I prepare a CSV?'):
-        st.write('Download the template from Upload CSV. Keep the headers exactly as supplied. Each row represents one customer. The limit is 10,000 rows and 10 MB. Extra columns are retained in the exported result but ignored by the model.')
-        st.write('Numeric blanks use the training median. Missing Offer and InternetType mean No Offer and No Internet. Other missing categories use the training mode. Unseen categories are accepted. Missing columns, invalid numeric text, infinities, and negative numbers are rejected.')
-    with st.expander('Why do the graphs and model performance use different customer counts?'):
-        st.write('Analysis charts summarize only the customers you selected or uploaded. Model performance comes from the saved evaluation. Customer group profiles describe all 7,043 customers in the source dataset.')
-    st.markdown('#### Input reference')
-    reference = pd.DataFrame([{'CSV column': f, 'Display label': display_label(f), 'Type': 'Number' if f in NUMERIC else 'Category', 'Meaning': HELP.get(f, 'Use the customer account value for this field.')} for f in FEATURES])
+with guide:
+    st.subheader('One project, three independent datasets')
+    st.dataframe(pd.DataFrame([{'Track': c['nav'], 'Dataset': c['file'], 'Input columns': len(c['features'])} for c in TRACKS.values()]), hide_index=True, use_container_width=True)
+    st.markdown('#### How to use this track')
+    st.write('1. Select the task in the sidebar.\n2. Try example records or review all sections of a single-record form.\n3. For batches, download the selected track\'s template and keep its exact headers.\n4. Read the interpretation, inspect Model performance, then export your results.')
+    if track == 'credit':
+        st.info('Target Y = 1 means default payment next month; Y = 0 means no default. The embedded text header and duplicate records are removed before training. Y and account IDs are never model inputs.')
+        st.write('X2: 1 male, 2 female. X3: 1 graduate school, 2 university, 3 high school, 4 other; 0, 5 and 6 are unspecified codes. X4: 1 married, 2 single, 3 other, 0 unspecified. Repayment status: -2 no consumption, -1 paid duly, 0 revolving credit, 1-9 delay in months. All bill/payment months refer to 2005. Amounts are in NT dollars.')
+        st.write('Negative bill balances and repayment-status codes are valid. Blank numeric values use training medians; blank category codes use training modes. Unsupported category and repayment codes are rejected. Demographic fields reproduce the academic dataset; outputs should not be used to decide lending eligibility.')
+    elif track == 'meteorites':
+        st.info('No target is required. Cluster IDs describe fitted groups, not meteorite composition, safety, or scientific class.')
+        st.write('All four input values are required. Mass must be nonnegative; year must be 0-2026. Latitude must be -90 to 90 and longitude -180 to 180. The pair (0, 0) is excluded. Invalid uploaded rows cause an explicit validation message; they are not silently dropped. Mass uses log1p before standard scaling. The fitted K-Means model assigns new records without refitting.')
+    else:
+        st.info('CLTV is the supplied Telco target. Its horizon and currency are not specified.')
+        st.write('Numeric blanks use training medians. Missing Offer and InternetType become No Offer and No Internet. Other categorical blanks use the training mode; unseen categories are accepted. Invalid numbers and negative values are rejected.')
+    st.caption('Uploads: maximum 10,000 records / 10 MB. Extra columns are preserved in exports but ignored by the pipeline. Files must match the selected track. Example scores are not a fresh held-out evaluation.')
+    reference = pd.DataFrame([{'CSV column': f, 'Label': label(track, f), 'Meaning': help_text(track, f)} for f in config['features']])
     st.dataframe(reference, hide_index=True, use_container_width=True)
 
-st.markdown('<div class="footer">TELCO INSIGHTS / Customer intelligence workspace</div>', unsafe_allow_html=True)
+st.markdown('<div class="footer">ML CAPSTONE EXPLORER / Regression, classification and clustering</div>', unsafe_allow_html=True)
