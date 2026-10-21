@@ -18,6 +18,14 @@ The fitted pipelines are included under `models/app/`. The app never trains on s
 
 The dashboard includes a navy and teal visual theme, model evaluation cards, portfolio summaries, interactive value/risk distributions, and a customer segment bubble chart. Single-customer inputs are grouped into profile, billing, and services. Example mode offers reproducible samples of 10–100 customers; prediction columns appear first in the results table.
 
+### App navigation
+
+- **Analyze customers:** choose example customers, a single customer, or a CSV upload. Single-customer fields use readable labels and three form sections. Results include a plain-language interpretation, a visual summary, and a separate records/export tab. The last submitted customer remains available when adjusting the churn threshold.
+- **Model performance:** view the fitted method, measured evaluation, metric explanations, limitations, and technical training details. Churn includes the test-set confusion matrix; clustering shows the group-count comparison.
+- **User guide:** follow the workflow, learn the meaning of each output, review upload rules, and consult the input-column reference.
+
+Segment descriptions summarize the saved profiles. The dashboard labels are friendly names; exported CSVs retain the original column names. Histograms are aggregated before plotting so a 10,000-row upload is not blocked by the chart library's row limit.
+
 ## Existing project work and scope
 
 All original notebooks, datasets, and existing model files are preserved. The previous README is retained as `README.original.md`.

@@ -1,5 +1,14 @@
 # Validation report
 
+## Structured interface update — 21 October 2026
+
+- `python -m pytest -q`: **9 passed** in 4.09 seconds.
+- Added regression coverage for keeping a submitted churn result visible when changing its threshold.
+- Browser review checked the reorganized analysis page, readable labels, and section navigation.
+- Fitted models, source datasets, and notebook work are unchanged by this interface update.
+
+## Initial implementation
+
 - Source repository commit: 14c45b6229c5ff26908d4b8ed15ce17e8feac943.
 - Python 3.11.9; scikit-learn 1.5.0; Streamlit 1.50.0; NumPy 1.26.4; pandas 2.2.2; PyArrow 17.0.0.
 - Training completed on the repository datasets; three fitted pipelines saved in models/app/.

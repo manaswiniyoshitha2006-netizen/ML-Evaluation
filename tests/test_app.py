@@ -66,3 +66,14 @@ def test_streamlit_tracks_and_form(track):
     assert len(app.success) == 1
     app.main.radio[0].set_value('Upload CSV').run()
     assert not app.exception
+
+def test_churn_result_persists_when_threshold_changes():
+    app = AppTest.from_file(str(ROOT / 'streamlit_app.py')).run(timeout=30)
+    app.sidebar.radio[0].set_value('Classification · Churn').run()
+    app.main.radio[0].set_value('Single customer').run()
+    app.button[0].click().run()
+    assert len(app.success) == 1
+    app.slider[0].set_value(0.9).run()
+    assert not app.exception
+    assert len(app.success) == 1
+    assert 'submitted_churn' in app.session_state
