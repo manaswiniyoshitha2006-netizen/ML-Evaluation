@@ -32,33 +32,40 @@ SEGMENTS = {
 def label(name):
     return LABELS.get(name, re.sub(r'(?<=[a-z])(?=[A-Z])', ' ', name).replace('_', ' '))
 
+CHART_PRIMARY = '#7961CE'
+CHART_THRESHOLD = '#CB4E78'
+CHART_PALETTE = ['#7961CE', '#38A6A3', '#DD9F43', '#CB4E78', '#5E82C4', '#93735A', '#9B66B1', '#729845', '#D87850', '#717B97']
+
 CSS = """
 <style>
-.stApp {background:#f5f7fb;color:#172b45;}
-[data-testid="stSidebar"] {background:#10243c; border-right:1px solid #193852;}
-[data-testid="stSidebar"] * {color:#e7eff8;}
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#b4c6db;}
+.stApp {background:#f6f5fb;color:#292540;}
+[data-testid="stSidebar"] {background:#211c3b; border-right:1px solid #3a315b;}
+[data-testid="stSidebar"] * {color:#f1edff;}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#c7bedf;}
 .block-container {max-width:1400px;padding-top:2rem;padding-bottom:3rem;}
 h1,h2,h3 {letter-spacing:-.035em;}
 h3 {font-size:1.35rem;}
-[data-testid="stMetric"] {background:white;border:1px solid #dfe7f0;border-radius:14px;padding:20px;box-shadow:0 3px 12px #132e4505;}
-[data-testid="stMetricLabel"] {color:#5e7088;}
-[data-testid="stMetricValue"] {color:#172b45;font-weight:700;}
-[data-testid="stForm"], [data-testid="stExpander"] {background:white;border:1px solid #dfe7f0;border-radius:14px;}
+[data-testid="stMetric"] {background:white;border:1px solid #e6e1f1;border-radius:16px;padding:20px;border-top:3px solid #ad96eb;box-shadow:0 3px 12px #4434690a;}
+[data-testid="stMetricLabel"] {color:#756c88;}
+[data-testid="stMetricValue"] {color:#292540;font-weight:700;}
+[data-testid="stForm"], [data-testid="stExpander"] {background:white;border:1px solid #e6e1f1;border-radius:14px;}
 [data-testid="stForm"] {padding:24px;}
 .stButton button,.stDownloadButton button {border-radius:9px;font-weight:600;min-height:42px;}
+[data-testid="stBaseButton-primary"] {background:#7157c9;border-color:#7157c9;color:white;}
+[data-testid="stBaseButton-primary"]:hover {background:#5d45b1;border-color:#5d45b1;color:white;}
+[data-testid="stBaseButton-secondary"]:hover {border-color:#9178dc;color:#6149ac;background:#f1edfb;}
 button[data-baseweb="tab"] {font-weight:600;font-size:.95rem;padding:12px 20px;}
-.hero {padding:30px 36px;border-radius:20px;background:linear-gradient(110deg,#102840,#1b5266);color:white;margin-bottom:20px;}
+.hero {padding:30px 36px;border-radius:20px;background:radial-gradient(ellipse at 92% 0%,#a881cf55,transparent 55%),linear-gradient(115deg,#322455,#6751a8);color:white;margin-bottom:20px;}
 .hero h1 {color:white;font-size:2.2rem;line-height:1.2;margin:10px 0;padding:0;}
-.hero p {color:#d2e0eb;max-width:740px;margin:0;line-height:1.65;}
-.eyebrow {color:#88e0cc;font-size:.7rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;}
-.step {display:inline-flex;align-items:center;justify-content:center;background:#e5f2f2;color:#176b73;width:30px;height:30px;border-radius:9px;margin-right:10px;font-size:.9rem;vertical-align:middle;}
+.hero p {color:#e2d9f7;max-width:740px;margin:0;line-height:1.65;}
+.eyebrow {color:#d6c5ff;font-size:.7rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;}
+.step {display:inline-flex;align-items:center;justify-content:center;background:#ece7fb;color:#6550b5;width:30px;height:30px;border-radius:9px;margin-right:10px;font-size:.9rem;vertical-align:middle;}
 .section-title {font-size:1.35rem;font-weight:700;margin:22px 0 8px;letter-spacing:-.025em;}
-.guide-card {background:white;border:1px solid #dfe7f0;border-top:3px solid #298a8e;border-radius:14px;padding:22px;min-height:180px;}
-.guide-card h4 {color:#172b45;margin:0 0 10px;font-size:1.1rem;}
-.guide-card p {color:#5b6c82;line-height:1.6;font-size:.92rem;}
-.result-note {border-left:4px solid #298a8e;background:#eaf5f3;border-radius:0 12px 12px 0;padding:18px 22px;margin:18px 0;color:#214d53;line-height:1.65;}
-.footer {border-top:1px solid #dce5ef;color:#708099;padding-top:20px;margin-top:32px;font-size:.8rem;}
+.guide-card {background:white;border:1px solid #e6e1f1;border-top:3px solid #7961ce;border-radius:14px;padding:22px;min-height:180px;}
+.guide-card h4 {color:#292540;margin:0 0 10px;font-size:1.1rem;}
+.guide-card p {color:#756c88;line-height:1.6;font-size:.92rem;}
+.result-note {border-left:4px solid #7961ce;background:#eee9fb;border-radius:0 12px 12px 0;padding:18px 22px;margin:18px 0;color:#4b3c78;line-height:1.65;}
+.footer {border-top:1px solid #e4deee;color:#80758f;padding-top:20px;margin-top:32px;font-size:.8rem;}
 @media(max-width:700px){.hero{padding:24px;}.hero h1{font-size:1.7rem;}.block-container{padding-top:1rem;}button[data-baseweb="tab"]{padding:10px 8px;font-size:.85rem;}[data-testid="stForm"]{padding:12px;}}
 </style>
 """

@@ -9,7 +9,7 @@ import streamlit as st
 from ml_core import ROOT
 from track_data import TRACKS, examples, infer
 from track_ui import label, help_text, groups, CHOICES, CODES, STATUS, INTEGERS
-from ui_helpers import CSS
+from ui_helpers import CSS, CHART_PRIMARY, CHART_THRESHOLD, CHART_PALETTE
 
 MODELS = ROOT / 'models' / 'app'
 st.set_page_config(page_title='ML Capstone Explorer', page_icon=':bar_chart:', layout='wide', initial_sidebar_state='expanded')
@@ -138,13 +138,13 @@ with analysis:
             with visual:
                 if track == 'meteorites':
                     counts = result.groupby('Cluster').size().reset_index(name='Records')
-                    chart = alt.Chart(counts).mark_bar(color='#238b91', cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(x='Cluster:O', y='Records:Q', tooltip=['Cluster', 'Records'])
+                    chart = alt.Chart(counts).mark_bar(color=CHART_PRIMARY, cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(x='Cluster:O', y='Records:Q', tooltip=['Cluster', 'Records'])
                     st.altair_chart(chart.properties(height=240), use_container_width=True)
                     st.markdown('#### Landing coordinates')
                     st.caption('Coordinate overview of the submitted records. Color represents assigned cluster.')
                     chart = alt.Chart(result[['reclong', 'reclat', 'Cluster']]).mark_circle(size=70, opacity=.7).encode(
                         x=alt.X('reclong:Q', title='Longitude', scale=alt.Scale(domain=[-180, 180])),
-                        y=alt.Y('reclat:Q', title='Latitude', scale=alt.Scale(domain=[-90, 90])), color='Cluster:N', tooltip=['reclat', 'reclong', 'Cluster'])
+                        y=alt.Y('reclat:Q', title='Latitude', scale=alt.Scale(domain=[-90, 90])), color=alt.Color('Cluster:N', scale=alt.Scale(range=CHART_PALETTE)), tooltip=['reclat', 'reclong', 'Cluster'])
                     # Aggregate duplicate points to keep full uploads below the chart row limit.
                     points = result.groupby(['reclong', 'reclat', 'Cluster']).size().reset_index(name='Records')
                     if len(points) > 5000:
@@ -155,17 +155,17 @@ with analysis:
                     field = config['output']
                     title = 'Predicted CLTV' if track == 'cltv' else 'Default score'
                     if len(result) == 1:
-                        chart = alt.Chart(result[[field]]).mark_bar(color='#238b91', size=45).encode(
+                        chart = alt.Chart(result[[field]]).mark_bar(color=CHART_PRIMARY, size=45).encode(
                             x=alt.X(f'{field}:Q', title=title, scale=alt.Scale(domain=[0, 1]) if track == 'credit' else alt.Scale(zero=True)), tooltip=[field])
                     else:
                         counts, edges = np.histogram(result[field], bins=15)
                         data = pd.DataFrame({'From': edges[:-1], 'To': edges[1:], 'Records': counts})
-                        chart = alt.Chart(data).mark_bar(color='#238b91').encode(x=alt.X('From:Q', bin='binned', title=title), x2='To:Q', y='Records:Q', tooltip=['From', 'To', 'Records'])
+                        chart = alt.Chart(data).mark_bar(color=CHART_PRIMARY).encode(x=alt.X('From:Q', bin='binned', title=title), x2='To:Q', y='Records:Q', tooltip=['From', 'To', 'Records'])
                     if track == 'credit':
-                        rule = alt.Chart(pd.DataFrame({'Threshold': [threshold]})).mark_rule(color='#df8e45', strokeDash=[5, 4]).encode(x='Threshold:Q')
+                        rule = alt.Chart(pd.DataFrame({'Threshold': [threshold]})).mark_rule(color=CHART_THRESHOLD, strokeDash=[5, 4]).encode(x='Threshold:Q')
                         chart = chart + rule
                     st.altair_chart(chart.properties(height=260), use_container_width=True)
-                    st.caption('For multiple records, bars count predictions within each range. The orange line, when shown, marks the classification threshold.')
+                    st.caption('For multiple records, bars count predictions within each range. The rose line, when shown, marks the classification threshold.')
             with records:
                 output = [config['output']] + (['PredictedDefault'] if track == 'credit' else [])
                 ordered = output + [c for c in result if c not in output]
